@@ -3,49 +3,7 @@ extern crate test;
 
 use itertools::Itertools;
 use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::{collections::HashMap, fs::read_to_string, iter::Peekable, str::Lines};
-
-fn build_map(lines: &mut Peekable<Lines>) -> HashMap<(i64, i64), i64> {
-    while lines.peek().unwrap().is_empty() {
-        _ = lines.next();
-    }
-
-    _ = lines.next();
-    let mut map = HashMap::new();
-
-    while lines.peek().is_some() && !lines.peek().unwrap().is_empty() {
-        let (dest_range_start, source_range_start, range_len) = lines
-            .next()
-            .unwrap()
-            .split(' ')
-            .map(|value| value.trim())
-            .filter(|value| !value.is_empty())
-            .map(|value| value.parse().unwrap())
-            .collect_tuple()
-            .unwrap();
-
-        map.insert(
-            (source_range_start, source_range_start + range_len),
-            dest_range_start,
-        );
-    }
-
-    map
-}
-
-fn translate(map: &HashMap<(i64, i64), i64>, entry: i64) -> i64 {
-    map.iter()
-        .find_map(
-            |((source_range_start, source_range_end), dest_range_start)| {
-                if entry >= *source_range_start && entry < *source_range_end {
-                    Some(entry - source_range_start + dest_range_start)
-                } else {
-                    None
-                }
-            },
-        )
-        .unwrap_or(entry)
-}
+use std::{collections::HashMap, fs::read_to_string, str::Lines};
 
 pub fn solve(lines: Lines) -> i64 {
     let mut lines = lines.peekable();
@@ -61,16 +19,37 @@ pub fn solve(lines: Lines) -> i64 {
         .tuples()
         .collect::<Vec<(_, _)>>();
 
-    let soil_map = build_map(&mut lines);
-    let fertilizer_map = build_map(&mut lines);
-    let water_map = build_map(&mut lines);
-    let light_map = build_map(&mut lines);
-    let temperature_map = build_map(&mut lines);
-    let humidity_map = build_map(&mut lines);
-    let location_map = build_map(&mut lines);
+    let mut maps = Vec::new();
+    for _ in 0..7 {
+        while lines.peek().unwrap().is_empty() {
+            _ = lines.next();
+        }
+
+        _ = lines.next();
+        let mut map = HashMap::new();
+
+        while lines.peek().is_some() && !lines.peek().unwrap().is_empty() {
+            let (dest_range_start, source_range_start, range_len) = lines
+                .next()
+                .unwrap()
+                .split(' ')
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .map(|value| value.parse().unwrap())
+                .collect_tuple()
+                .unwrap();
+
+            map.insert(
+                (source_range_start, source_range_start + range_len),
+                dest_range_start,
+            );
+        }
+
+        maps.push(map)
+    }
 
     let num_threads = num_cpus::get();
-    let threads = (0..num_threads)
+    (0..num_threads)
         .cartesian_product(seeds.iter())
         .map(|(thread, (range_start, range_len))| {
             let per_thread_range_len = range_len / num_threads as i64;
@@ -85,19 +64,28 @@ pub fn solve(lines: Lines) -> i64 {
             let mut smallest = i64::MAX;
 
             for mut entry in range {
-                entry = translate(&soil_map, entry);
-                entry = translate(&fertilizer_map, entry);
-                entry = translate(&water_map, entry);
-                entry = translate(&light_map, entry);
-                entry = translate(&temperature_map, entry);
-                entry = translate(&humidity_map, entry);
-                smallest = smallest.min(translate(&location_map, entry));
+                for map in &maps {
+                    entry = map
+                        .iter()
+                        .find_map(
+                            |((source_range_start, source_range_end), dest_range_start)| {
+                                if entry >= *source_range_start && entry < *source_range_end {
+                                    Some(entry - source_range_start + dest_range_start)
+                                } else {
+                                    None
+                                }
+                            },
+                        )
+                        .unwrap_or(entry)
+                }
+
+                smallest = smallest.min(entry);
             }
 
             smallest
-        });
-
-    threads.min().unwrap()
+        })
+        .min()
+        .unwrap()
 }
 
 fn main() {
