@@ -1,10 +1,11 @@
 #![feature(test)]
 extern crate test;
 
+use itertools::Itertools;
 use std::{fs::read_to_string, str::Lines};
 
 pub fn solve(lines: Lines) -> i64 {
-    let lines = lines.collect::<Vec<_>>();
+    let lines = lines.collect_vec();
 
     lines
         .iter()

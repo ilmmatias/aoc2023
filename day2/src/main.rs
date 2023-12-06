@@ -6,7 +6,6 @@ use std::{collections::HashMap, fs::read_to_string, str::Lines};
 pub fn solve(lines: Lines) -> i64 {
     lines
         .map(|line| {
-            let mut colors = HashMap::new();
             line[5..]
                 .split_once(|ch: char| !ch.is_digit(10))
                 .unwrap()
@@ -15,16 +14,16 @@ pub fn solve(lines: Lines) -> i64 {
                 .map(|game| game.split(','))
                 .map(|game| game.map(|part| part.trim()))
                 .map(|game| game.map(|part| part.split_once(' ').unwrap()))
-                .map(|game| game.map(|(count, color)| (count.parse::<i64>().unwrap(), color)))
-                .for_each(|game| {
+                .map(|game| game.map(|(count, color)| (count.parse().unwrap(), color)))
+                .fold(HashMap::new(), |mut map, game| {
                     game.for_each(|(count, color)| {
-                        colors
-                            .entry(color)
+                        map.entry(color)
                             .and_modify(|parts: &mut Vec<i64>| parts.push(count))
                             .or_insert(vec![count]);
-                    })
-                });
-            colors
+                    });
+
+                    map
+                })
                 .iter()
                 .map(|(_, value)| value.iter().max().unwrap())
                 .product::<i64>()

@@ -2,8 +2,69 @@
 extern crate test;
 
 use itertools::Itertools;
-use rayon::iter::{ParallelBridge, ParallelIterator};
-use std::{collections::HashMap, fs::read_to_string, str::Lines};
+use std::{fs::read_to_string, str::Lines};
+
+fn translate(map: &Vec<((i64, i64), i64)>, range: &(i64, i64)) -> Vec<(i64, i64)> {
+    let mut position = range.0;
+    let mut ranges = Vec::new();
+
+    while position < range.0 + range.1 {
+        let remaining_length = range.0 + range.1 - position;
+        let mapping = map
+            .iter()
+            .find(|((source_range_start, source_range_len), _)| {
+                *source_range_start <= position && source_range_start + source_range_len > position
+            });
+
+        // Intersection between ranges, use everything we can from the match.
+        if let Some(((source_range_start, source_range_len), dest_range_start)) = mapping {
+            let dest_range_len =
+                remaining_length.min(source_range_len - (position - source_range_start));
+
+            ranges.push((
+                position - source_range_start + dest_range_start,
+                dest_range_len,
+            ));
+
+            position += dest_range_len;
+            continue;
+        }
+
+        // There are more entries after us, append everything up to the closest entry unchanged
+        // and keep on going afterwards. */
+        if let Some(((source_range_start, _), _)) = map
+            .iter()
+            .find(|((source_range_start, _), _)| *source_range_start > position)
+        {
+            let dest_range_len = remaining_length.min(source_range_start - position);
+            ranges.push((position, dest_range_len));
+            position += dest_range_len;
+            continue;
+        }
+
+        // Nothing left, we should be done (append as is, and return).
+        ranges.push((position, remaining_length));
+        break;
+    }
+
+    ranges
+}
+
+fn merge(mut ranges: Vec<(i64, i64)>) -> Vec<(i64, i64)> {
+    let mut i = 0;
+
+    ranges.sort_unstable_by_key(|(range_start, _)| *range_start);
+    while i < ranges.len() - 1 {
+        if ranges[i].0 + ranges[i].1 >= ranges[i + 1].0 {
+            ranges[i].1 = ranges[i + 1].0 + ranges[i + 1].1 - ranges[i].0;
+            ranges.remove(i + 1);
+        } else {
+            i += 1;
+        }
+    }
+
+    ranges
+}
 
 pub fn solve(lines: Lines) -> i64 {
     let mut lines = lines.peekable();
@@ -15,9 +76,9 @@ pub fn solve(lines: Lines) -> i64 {
         .split(' ')
         .map(|seed| seed.trim())
         .filter(|seed| !seed.is_empty())
-        .map(|seed| seed.parse::<i64>().unwrap())
+        .map(|seed| seed.parse().unwrap())
         .tuples()
-        .collect::<Vec<(_, _)>>();
+        .collect_vec();
 
     let mut maps = Vec::new();
     for _ in 0..7 {
@@ -26,7 +87,7 @@ pub fn solve(lines: Lines) -> i64 {
         }
 
         _ = lines.next();
-        let mut map = HashMap::new();
+        let mut map = Vec::new();
 
         while lines.peek().is_some() && !lines.peek().unwrap().is_empty() {
             let (dest_range_start, source_range_start, range_len) = lines
@@ -39,51 +100,25 @@ pub fn solve(lines: Lines) -> i64 {
                 .collect_tuple()
                 .unwrap();
 
-            map.insert(
-                (source_range_start, source_range_start + range_len),
-                dest_range_start,
-            );
+            map.push(((source_range_start, range_len), dest_range_start));
         }
 
+        map.sort_unstable_by_key(|((source_range_start, _), _)| *source_range_start);
         maps.push(map)
     }
 
-    let num_threads = num_cpus::get() * 2;
-    (0..num_threads)
-        .cartesian_product(seeds.iter())
-        .map(|(thread, (range_start, range_len))| {
-            let per_thread_range_len = range_len / num_threads as i64;
-            let this_thread_range_start = *range_start + per_thread_range_len * thread as i64;
-            let this_thread_range_len =
-                per_thread_range_len.min(range_len - per_thread_range_len * thread as i64);
-            this_thread_range_start..this_thread_range_start + this_thread_range_len
+    *maps
+        .iter()
+        .fold(seeds, |ranges, map| {
+            merge(
+                ranges
+                    .iter()
+                    .flat_map(|range| translate(map, range))
+                    .collect_vec(),
+            )
         })
-        .par_bridge()
-        .map(|range| {
-            println!("checking range {:?}", range);
-            let mut smallest = i64::MAX;
-
-            for mut entry in range {
-                for map in &maps {
-                    entry = map
-                        .iter()
-                        .find_map(
-                            |((source_range_start, source_range_end), dest_range_start)| {
-                                if entry >= *source_range_start && entry < *source_range_end {
-                                    Some(entry - source_range_start + dest_range_start)
-                                } else {
-                                    None
-                                }
-                            },
-                        )
-                        .unwrap_or(entry)
-                }
-
-                smallest = smallest.min(entry);
-            }
-
-            smallest
-        })
+        .iter()
+        .map(|(range_start, _)| range_start)
         .min()
         .unwrap()
 }

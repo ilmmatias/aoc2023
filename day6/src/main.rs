@@ -20,7 +20,10 @@ pub fn solve(mut lines: Lines) -> i64 {
     let delta = b * b - 4f64 * a * c;
     let x0 = (-b + delta.sqrt()) / (2f64 * a);
     let x1 = (-b - delta.sqrt()) / (2f64 * a);
-    (x1.ceil() - x0.ceil()) as i64
+
+    // x1.ceil() - x0.ceil() works on most things I threw at it (as it's really hard for x1 to
+    // not have a fractional part), but this is safer and works even if x1 is an exact integer.
+    (x1.floor() - x0.ceil() + 1f64) as i64
 }
 
 fn main() {
