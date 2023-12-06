@@ -48,7 +48,7 @@ pub fn solve(lines: Lines) -> i64 {
         maps.push(map)
     }
 
-    let num_threads = num_cpus::get();
+    let num_threads = num_cpus::get() * 2;
     (0..num_threads)
         .cartesian_product(seeds.iter())
         .map(|(thread, (range_start, range_len))| {
