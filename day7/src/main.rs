@@ -1,9 +1,8 @@
 #![feature(test)]
 extern crate test;
 
-use std::{cmp::Ordering, collections::HashMap, fs::read_to_string, str::Lines};
-
 use itertools::Itertools;
+use std::{cmp::Ordering, collections::HashMap, fs::read_to_string, str::Lines};
 
 pub fn solve(lines: Lines) -> i64 {
     let strength: HashMap<char, i64> = [
